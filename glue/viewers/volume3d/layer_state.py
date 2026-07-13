@@ -27,9 +27,9 @@ class VolumeLayerState3D(LayerState3D, StretchStateMixin):
     vmin = CallbackPropertyAlias('v_min')
     vmax = CallbackPropertyAlias('v_max')
 
-    def __init__(self, layer=None, **kwargs):
+    def __init__(self, layer=None, viewer_state=None, **kwargs):
 
-        super(VolumeLayerState3D, self).__init__(layer=layer)
+        super(VolumeLayerState3D, self).__init__(layer=layer, viewer_state=viewer_state)
 
         if self.layer is not None:
 

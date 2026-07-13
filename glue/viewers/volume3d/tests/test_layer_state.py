@@ -4,6 +4,7 @@ from glue.core import Data, DataCollection
 from glue.core.tests.test_state import clone
 
 from ..layer_state import VolumeLayerState3D
+from ..viewer_state import VolumeViewerState3D
 
 
 class TestVolumeLayerState3D:
@@ -12,7 +13,11 @@ class TestVolumeLayerState3D:
         self.data = Data(label='test_cube')
         self.data['x'] = np.arange(24).reshape((2, 3, 4))
         self.data_collection = DataCollection([self.data])
-        self.state = VolumeLayerState3D(layer=self.data)
+        self.viewer_state = VolumeViewerState3D()
+        self.state = VolumeLayerState3D(layer=self.data, viewer_state=self.viewer_state)
+
+    def test_viewer_state(self):
+       assert self.state.viewer_state == self.viewer_state
 
     def test_flip_limits(self):
         self.state.attribute = self.data.id['x']

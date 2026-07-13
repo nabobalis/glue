@@ -4,6 +4,7 @@ from glue.core import Data, DataCollection
 from glue.core.tests.test_state import clone
 
 from ..layer_state import ScatterLayerState3D
+from ..viewer_state import ScatterViewerState3D
 
 
 class TestScatterLayerState3D:
@@ -11,7 +12,11 @@ class TestScatterLayerState3D:
     def setup_method(self, method):
         self.data = Data(x=[1, 2, 3, 4, 5], label='test_data')
         self.data_collection = DataCollection([self.data])
-        self.state = ScatterLayerState3D(layer=self.data)
+        self.viewer_state = ScatterViewerState3D()
+        self.state = ScatterLayerState3D(layer=self.data, viewer_state=self.viewer_state)
+
+    def test_viewer_state(self):
+        assert self.state.viewer_state == self.viewer_state
 
     def test_size_syncs_to_layer_markersize(self):
         self.state.size = 15
