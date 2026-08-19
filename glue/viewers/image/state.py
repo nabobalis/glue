@@ -219,8 +219,8 @@ class ImageViewerState(MatplotlibDataViewerState):
                         layer_state.global_sync = False
 
     def _update_combo_ref_data(self):
-        self.ref_data_helper.set_multiple_data(data for data in self.layers_data
-                                               if data.ndim > 1)
+        self.ref_data_helper.set_multiple_data([data for data in self.layers_data
+                                                if data.ndim > 1])
 
     def _update_combo_att(self):
         with delay_callback(self, 'x_att_world', 'y_att_world'):
