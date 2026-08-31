@@ -36,7 +36,13 @@ def python_export_profile_layer(layer, *args):
     script += "# Extract the values for the x-axis\n"
     script += "axis_view = [0] * layer_data.ndim\n"
     script += "axis_view[profile_axis] = slice(None)\n"
-    script += "profile_x_values = layer_data['{0}', tuple(axis_view)]\n".format(layer._viewer_state.x_att)
+    if layer._viewer_state.wcsaxes_active:
+        # WCSAxes formats world tick labels from the pixel positions, so the
+        # profile is plotted in pixel coordinates
+        x_att = layer._viewer_state.x_att_pixel
+    else:
+        x_att = layer._viewer_state.x_att
+    script += "profile_x_values = layer_data['{0}', tuple(axis_view)]\n".format(x_att)
     if layer._viewer_state.function == 'slice':
         # NaN values should produce gaps in the line, as in the live viewer
         script += "keep = slice(None)\n\n"
