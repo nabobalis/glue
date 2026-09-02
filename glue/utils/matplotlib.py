@@ -446,7 +446,11 @@ SEC_PER_MIN = 60.
 SEC_PER_HOUR = SEC_PER_MIN * MIN_PER_HOUR
 SEC_PER_DAY = SEC_PER_HOUR * HOURS_PER_DAY
 
-T0 = np.datetime64('0001-01-01T00:00:00').astype('datetime64[s]')
+def _t0():
+    # matplotlib >= 3.3 counts days from a configurable epoch (1970-01-01 by
+    # default) rather than from 0001-01-01 (+1 day); follow it so that the
+    # date locators/formatters label glue's datetime64 axes correctly
+    return np.datetime64(dates.get_epoch()).astype('datetime64[s]')
 
 
 def datetime64_to_mpl(d):
@@ -462,9 +466,9 @@ def datetime64_to_mpl(d):
     # seconds.  That should get out to +/-2e11 years.
     extra = d - d.astype('datetime64[s]')
     extra = extra.astype('timedelta64[ns]')
-    dt = (d.astype('datetime64[s]') - T0).astype(np.float64)
+    dt = (d.astype('datetime64[s]') - _t0()).astype(np.float64)
     dt += extra.astype(np.float64) / 1.0e9
-    dt = dt / SEC_PER_DAY + 1.0
+    dt = dt / SEC_PER_DAY
 
     return dt
 
@@ -473,8 +477,8 @@ def mpl_to_datetime64(dt):
 
     dt = np.asarray(dt, np.float64)
 
-    dt = (dt - 1.0) * SEC_PER_DAY
-    dt_s = dt.astype(np.int64) + T0.astype(np.int64)
+    dt = dt * SEC_PER_DAY
+    dt_s = dt.astype(np.int64) + _t0().astype(np.int64)
     dt_ns = ((dt % 1) * 1e9).astype(np.int64)
 
     dt_s = np.array(dt_s, dtype='datetime64[s]')
