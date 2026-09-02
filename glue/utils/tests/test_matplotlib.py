@@ -2,6 +2,7 @@
 
 import pytest
 import numpy as np
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 from matplotlib.artist import Artist
@@ -184,7 +185,11 @@ def test_freeze_margins():
 
 
 def test_mpl_datetime64():
-    # Make sure the mpl <-> datetime64 conversion round-trips
-    mpl1 = 719313
+    # Make sure the mpl <-> datetime64 conversion round-trips and agrees with
+    # matplotlib's own epoch (1970-01-01 since matplotlib 3.3, configurable)
+    mpl1 = 18875.5
     mpl2 = datetime64_to_mpl(mpl_to_datetime64(mpl1))
     assert mpl1 == mpl2
+    dt = np.array(['2021-09-05T12:00:00'], dtype='datetime64[s]')
+    assert_allclose(datetime64_to_mpl(dt), mdates.date2num(dt))
+    assert mpl_to_datetime64(mdates.date2num(dt)) == dt
