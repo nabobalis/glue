@@ -39,8 +39,11 @@ def python_export_profile_layer(layer, *args):
         script += "profile_values = layer_data.compute_statistic('{0}', cid, axis=collapsed_axes)\n\n".format(layer._viewer_state.function)
 
     script += "# Extract the values for the x-axis\n"
-    script += "axis_view = [0] * layer_data.ndim\n"
-    script += "axis_view[profile_axis] = slice(None)\n"
+    if layer._viewer_state.function == 'slice':
+        script += "axis_view = data_view\n"
+    else:
+        script += "axis_view = [0] * layer_data.ndim\n"
+        script += "axis_view[profile_axis] = slice(None)\n"
     if layer._viewer_state.wcsaxes_active:
         # WCSAxes formats world tick labels from the pixel positions, so the
         # profile is plotted in pixel coordinates
