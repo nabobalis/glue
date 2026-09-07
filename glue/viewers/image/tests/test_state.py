@@ -471,3 +471,55 @@ def test_attribute_units_invalid():
     data.get_component('x').units = 'banana'
 
     ImageLayerState(layer=data, viewer_state=viewer_state)
+
+
+def test_viewer_state_reference_data():
+
+    # Regression test to ensure reference data is set correctly when
+    # adding/removing 1D/2D layers
+
+    viewer_state = ImageViewerState()
+
+    data_1d = Data(x=np.arange(100))
+    layer_state_1d = ImageLayerState(layer=data_1d, viewer_state=viewer_state)
+    viewer_state.layers.append(layer_state_1d)
+
+    # Verify that reference_data is None (1D data is filtered out)
+    assert viewer_state.reference_data is None
+
+    data_2d = Data(x=np.ones((5, 10)))
+    layer_state_2d = ImageLayerState(layer=data_2d, viewer_state=viewer_state)
+    viewer_state.layers.append(layer_state_2d)
+
+    # Verify that 2D data was selected as reference
+    assert viewer_state.reference_data is data_2d
+
+    # Add a second 2D dataset, set this as reference, then remove it again
+    more_data_2d = Data(x=np.ones((10, 20)) * np.arange(1, 21))
+    another_layer_state_2d = ImageLayerState(layer=more_data_2d, viewer_state=viewer_state)
+    viewer_state.layers.append(another_layer_state_2d)
+    assert viewer_state.reference_data is data_2d
+
+    viewer_state.reference_data = more_data_2d
+    assert viewer_state.reference_data is more_data_2d
+
+    # Verify that the original 2D data becomes reference again
+    viewer_state.layers.remove(another_layer_state_2d)
+    assert viewer_state.reference_data is data_2d
+
+    # Add a second 1D dataset to ensure that the viewer can handle multiple 1D datasets
+    another_data_1d = Data(x=np.arange(100, 200))
+    another_layer_state_1d = ImageLayerState(layer=another_data_1d, viewer_state=viewer_state)
+    viewer_state.layers.append(another_layer_state_1d)
+
+    # Verify that 2D data is still selected as reference
+    assert viewer_state.reference_data is data_2d
+
+    # Remove data layers from the viewer (start with 2D) and check that reference_data is None
+    # Also confirms that nothing crashes or breaks along the way
+    for layer_state in [layer_state_2d, another_layer_state_1d, layer_state_1d]:
+        # Remove the layer
+        viewer_state.layers.remove(layer_state)
+
+        # Verify reference_data is None
+        assert viewer_state.reference_data is None
