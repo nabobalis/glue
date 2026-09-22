@@ -396,7 +396,6 @@ def test_pixel2world_single_axis_affine_1d():
     assert_allclose(pixel2world_single_axis(coord, x.reshape((3, 1)), world_axis=0), expected.reshape((3, 1)))
 
 
-@requires_astropy
 def test_world2pixel_single_axis_correlated_axes():
 
     # Regression test for a bug in world2pixel_single_axis which collapsed
@@ -404,31 +403,17 @@ def test_world2pixel_single_axis_correlated_axes():
     # to a scalar, even when it is needed to invert that pixel axis (e.g. the
     # time axis of a cube whose celestial axes depend on time)
 
-    from astropy.wcs.wcsapi import BaseLowLevelWCS
+    # Pixel axes (x, t): world 0 = x + 10 * t depends on both, world 1 = t
+    coord = WCSCoordinates(naxis=2)
+    coord.wcs.crpix = 1, 1
+    coord.wcs.pc = [[1, 10], [0, 1]]
 
-    class CorrelatedWCS(BaseLowLevelWCS):
-        # pixel axes (x, t); world lon = x + 10 * t depends on both, time = t
-        pixel_n_dim = world_n_dim = 2
-        world_axis_physical_types = ['custom:pos.helioprojective.lon', 'time']
-        world_axis_units = ['arcsec', 's']
-        world_axis_object_components = [('c', 0, 'value'), ('t', 0, 'value')]
-        world_axis_object_classes = {'c': (float, (), {}), 't': (float, (), {})}
-        array_shape = pixel_shape = None
-        axis_correlation_matrix = np.array([[True, True], [False, True]])
-
-        def pixel_to_world_values(self, x, t):
-            return x + 10 * t, t
-
-        def world_to_pixel_values(self, lon, t):
-            return lon - 10 * t, t
-
-    wcs = CorrelatedWCS()
     lon = np.array([5., 15., 25.])
     t = np.array([0., 1., 2.])
 
     # All three points sit at pixel x = 5, which needs t per element
-    assert_allclose(world2pixel_single_axis(wcs, lon, t, pixel_axis=0), [5, 5, 5])
-    assert_allclose(world2pixel_single_axis(wcs, lon, t, pixel_axis=1), [0, 1, 2])
+    assert_allclose(world2pixel_single_axis(coord, lon, t, pixel_axis=0), [5, 5, 5])
+    assert_allclose(world2pixel_single_axis(coord, lon, t, pixel_axis=1), [0, 1, 2])
 
 
 def test_affine():
