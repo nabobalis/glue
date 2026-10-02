@@ -116,13 +116,14 @@ class MatplotlibImageMixin(object):
         else:
             self.axes.reset_wcs(slices=self.state.wcsaxes_slice, wcs=ref_coords)
 
-        # Reset the axis labels to match the fact that the new axes have no labels
-        self.state.x_axislabel = ''
-        self.state.y_axislabel = ''
-
         self._update_appearance_from_settings()
         self._update_axes()
 
+        # The new axes have no labels, so set them from the state. Resetting
+        # the state labels to '' and back would set each label twice, and
+        # setting a WCSAxes label is expensive.
+        self.update_x_axislabel()
+        self.update_y_axislabel()
         self.update_x_ticklabel()
         self.update_y_ticklabel()
 
