@@ -180,6 +180,30 @@ def test_arithmetic_id_scalar():
     assert_array_equal(d[2 ** d.id['x']], [2, 4, 8, 16])
 
 
+def test_arithmetic_id_scalar_dtype():
+
+    # A scalar operand should not upcast floating-point data, but integer data
+    # should still be upcast rather than overflow.
+
+    d = Data(x=np.array([1, 2, 3], dtype=np.float32),
+             y=np.array([100, 200, 300], dtype=np.int16))
+
+    assert d[d.id['x'] * 2].dtype == np.float32
+    assert d[2 * d.id['x']].dtype == np.float32
+    assert d[(d.id['x'] + 1.5) / 2].dtype == np.float32
+    assert_array_equal(d[d.id['x'] * 2], [2, 4, 6])
+
+    assert_array_equal(d[d.id['y'] * 1000], [100000, 200000, 300000])
+
+    # Operations between two arrays should still broadcast
+    d = Data(x=np.ones((2, 3), dtype=np.float32),
+             y=np.broadcast_to(np.arange(3, dtype=np.float32), (2, 3)))
+    assert unbroadcast(d['y']).shape == (1, 3)
+    result = d[d.id['x'] + d.id['y']]
+    assert result.dtype == np.float32
+    assert_array_equal(result, [[1, 2, 3], [1, 2, 3]])
+
+
 def test_arithmetic_id_id():
     d = Data(x=[1, 2, 3, 4], y=[10, 20, 10, 20])
     assert_array_equal(d[d.id['x'] + d.id['y']], [11, 22, 13, 24])
