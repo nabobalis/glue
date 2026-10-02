@@ -479,8 +479,15 @@ class BinaryComponentLink(ComponentLink):
             original_shape = right.shape
             right = unbroadcast(right)
 
+        # Leave a scalar operand as a scalar when the other operand is a
+        # floating-point array so that e.g. float32 * 2 stays float32 instead
+        # of being upcast to float64. Integer arrays are still broadcast
+        # against the scalar so that e.g. int16 * 1000 is upcast and does not
+        # overflow.
         if original_shape is not None:
-            left, right = np.broadcast_arrays(left, right)
+            arrays = [x for x in (left, right) if isinstance(x, np.ndarray)]
+            if len(arrays) == 2 or not np.issubdtype(arrays[0].dtype, np.inexact):
+                left, right = np.broadcast_arrays(left, right)
 
         result = self._op(left, right)
 
