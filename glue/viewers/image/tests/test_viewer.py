@@ -1,9 +1,13 @@
+from unittest.mock import patch
+
 import numpy as np
 import pytest
+from numpy.testing import assert_equal
 from echo import delay_callback
 from glue.tests.visual.helpers import visual_test
 from glue.viewers.image.viewer import SimpleImageViewer
 from glue.viewers.image.state import AggregateSlice
+from glue.viewers.image.pixel_selection_subset_state import PixelSubsetState
 from glue.core.application_base import Application
 from glue.core.data import Data
 from glue.core.link_helpers import LinkSame
@@ -354,3 +358,35 @@ def test_2d_3d_linking_exception():
 
     assert viewer.layers[0].enabled
     assert not viewer.layers[1].enabled
+
+
+def test_hidden_subset_layer():
+
+    # Changing a subset should not update or redraw the image viewers in which
+    # its layer is hidden, and the layer should be up to date when shown again
+
+    data = Data(x=np.arange(12).reshape((3, 4)), label='data')
+
+    app = Application()
+    app.data_collection.append(data)
+
+    viewer1 = app.new_data_viewer(SimpleImageViewer)
+    viewer1.add_data(data)
+    viewer2 = app.new_data_viewer(SimpleImageViewer)
+    viewer2.add_data(data)
+
+    subset_group = app.data_collection.new_subset_group(
+        subset_state=PixelSubsetState(data, (slice(0, 1), slice(0, 1))))
+
+    viewer2.layers[1].state.visible = False
+
+    with patch.object(viewer2.figure.canvas, 'draw') as draw:
+        subset_group.subset_state = PixelSubsetState(data, (slice(2, 3), slice(3, 4)))
+    assert draw.call_count == 0
+
+    viewer2.layers[1].state.visible = True
+
+    viewer1.figure.canvas.draw()
+    viewer2.figure.canvas.draw()
+    assert_equal(np.asarray(viewer2.figure.canvas.buffer_rgba()),
+                 np.asarray(viewer1.figure.canvas.buffer_rgba()))
