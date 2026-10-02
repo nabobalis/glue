@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import numpy as np
 import pytest
 from echo import delay_callback
@@ -44,6 +46,38 @@ def test_serialize_aggregate_slice(func):
     assert new_slice.function is func
     assert new_slice.slice == slice(0, 3)
     assert new_slice.center == 1
+
+
+def test_slice_change_sets_axis_labels_once():
+
+    # If the world coordinates shown depend on the slice, changing the slice
+    # resets the WCS of the axes. Setting a WCSAxes label is expensive, so
+    # each label should only be set once, and should still be shown.
+
+    wcs = WCS(naxis=3)
+    wcs.wcs.pc = [[1, 0, 1], [0, 1, 1], [0, 0, 1]]
+
+    data = Data(x=np.zeros((4, 5, 6)), coords=wcs, label='cube')
+
+    app = Application()
+    app.data_collection.append(data)
+
+    viewer = app.new_data_viewer(SimpleImageViewer)
+    viewer.add_data(data)
+
+    assert viewer._changing_slice_requires_wcs_update
+
+    with (patch.object(viewer.axes, 'set_xlabel', wraps=viewer.axes.set_xlabel) as set_xlabel,
+          patch.object(viewer.axes, 'set_ylabel', wraps=viewer.axes.set_ylabel) as set_ylabel):
+        viewer.state.slices = (2, 0, 0)
+
+    assert set_xlabel.call_count == 1
+    assert set_ylabel.call_count == 1
+
+    assert viewer.state.x_axislabel == viewer.state.x_att_world.label
+    assert viewer.state.y_axislabel == viewer.state.y_att_world.label
+    assert viewer.axes.get_xlabel() == viewer.state.x_axislabel
+    assert viewer.axes.get_ylabel() == viewer.state.y_axislabel
 
 
 @visual_test
