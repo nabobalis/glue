@@ -152,8 +152,8 @@ class LinkManager(HubListener):
         for link in self._external_links:
             if remove_cid in link:
                 remove.append(link)
-        for link in remove:
-            self.remove_link(link)
+        if remove:
+            self.remove_link(remove)
 
     def _data_removed(self, msg):
         remove = []
@@ -162,8 +162,8 @@ class LinkManager(HubListener):
                 if cid in link and cid.parent is msg.data:
                     remove.append(link)
                     break
-        for link in remove:
-            self.remove_link(link)
+        if remove:
+            self.remove_link(remove)
 
     def clear_links(self):
         self._external_links[:] = []
