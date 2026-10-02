@@ -58,6 +58,32 @@ def test_view_shape():
     assert view_shape((10, 10), ([1, 2, 3], [2, 3, 4])) == (3,)
 
 
+@pytest.mark.parametrize('view', [(np.arange(3), np.arange(3)),
+                                  (np.arange(3)[:, None], np.arange(4)),
+                                  (np.array([[0, 1], [2, 3]]),),
+                                  (np.array(2), np.array(3)),
+                                  tuple(np.indices((5, 3))),
+                                  tuple(np.ix_(range(5), range(6), range(7))),
+                                  (np.arange(3), slice(None)),
+                                  (np.array([True, False, True, False, True]),),
+                                  (np.arange(3), [3, 4, 5])])
+def test_view_shape_index_arrays(view):
+    assert view_shape((5, 6, 7), view) == np.zeros((5, 6, 7))[view].shape
+
+
+def test_view_shape_index_arrays_large():
+    # The view is never materialized, so it can be too large to fit in memory
+    index = np.broadcast_to(np.intp(0), (2 ** 31, 1))
+    assert view_shape((10, 10), (index, index.T)) == (2 ** 31, 2 ** 31)
+
+
+def test_view_shape_index_arrays_invalid():
+    with pytest.raises(IndexError):
+        view_shape((5, 6), (np.arange(3), np.arange(4)))
+    with pytest.raises(IndexError):
+        view_shape((5, 6), (np.arange(3),) * 3)
+
+
 def test_coerce_numeric():
 
     x = np.array(['1', '2', '3.14', '4'], dtype=str)
