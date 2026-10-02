@@ -1,7 +1,9 @@
 # pylint: disable=I0011,W0613,W0201,W0212,E1101,E1103
 
 from itertools import product
+from unittest.mock import patch
 
+import pytest
 import numpy as np
 from numpy.testing import assert_array_equal
 
@@ -300,6 +302,36 @@ class TestLinkManager(object):
 
         assert len(d1.externally_derivable_components) == 0
         assert len(d2.externally_derivable_components) == 0
+
+    @pytest.mark.parametrize(('remove', 'updates'), [('data', 1), ('component', 2)])
+    def test_remove_links_updates_once(self, remove, updates):
+
+        # Removing a dataset or a component with several links should update
+        # the externally derivable components once, not once per link. Removing
+        # a component also emits ComponentsChangedMessage, which triggers one
+        # more update through the data collection.
+
+        d1 = Data(x=[1, 2, 3], label='hub')
+        d2 = Data(a=[1, 2, 3], c=[4, 5, 6], label='d2')
+        d3 = Data(b=[1, 2, 3], d=[4, 5, 6], label='d3')
+
+        dc = DataCollection([d1, d2, d3])
+        dc.add_link([LinkSame(d1.id['x'], d2.id['a']),
+                     LinkSame(d1.id['x'], d3.id['b']),
+                     LinkSame(d2.id['c'], d3.id['d'])])
+
+        lm = dc._link_manager
+        with patch.object(lm, 'update_externally_derivable_components',
+                          wraps=lm.update_externally_derivable_components) as update:
+            if remove == 'data':
+                dc.remove(d1)
+            else:
+                d1.remove_component(d1.id['x'])
+
+        assert update.call_count == updates
+        assert len(dc.external_links) == 1
+        assert set(d2.externally_derivable_components) == {d3.id['d']}
+        assert set(d3.externally_derivable_components) == {d2.id['c']}
 
 
 def test_is_convertible_to_single_pixel_cid():
