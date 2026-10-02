@@ -1,3 +1,6 @@
+import sys
+import subprocess
+
 import pytest
 import numpy as np
 from numpy.testing import assert_allclose
@@ -640,3 +643,13 @@ def test_no_wcs_overlap():
 
     with pytest.raises(NoAffineApproximation, match='no overlap'):
         link.as_affine_link()
+
+
+def test_import_does_not_import_scipy_optimize():
+
+    # The plugin is imported when glue starts, but scipy.optimize is only
+    # needed by WCSLink.as_affine_link so should not be imported up front.
+
+    code = ('import sys; import glue.plugins.wcs_autolinking.wcs_autolinking; '
+            'assert "scipy.optimize" not in sys.modules')
+    subprocess.run([sys.executable, '-c', code], check=True)

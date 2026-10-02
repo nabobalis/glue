@@ -3,7 +3,6 @@ import copy
 import numpy as np
 from astropy.wcs.utils import pixel_to_pixel
 from astropy.wcs.wcsapi import BaseHighLevelWCS, SlicedLowLevelWCS, HighLevelWCSWrapper
-from scipy.optimize import leastsq
 from glue.config import autolinker, link_helper
 from glue.core.link_helpers import MultiLink
 
@@ -254,6 +253,8 @@ class WCSLink(MultiLink):
         The deviation to be compared to the tolerance is measured in the frame
         of reference of the second dataset.
         """
+
+        from scipy.optimize import leastsq
 
         if len(self.cids1) != 2 or len(self.cids2) != 2:
             raise NotImplementedError("Only 2-dimensional WCS links are supported")
