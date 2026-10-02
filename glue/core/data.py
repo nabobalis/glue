@@ -1910,7 +1910,14 @@ class Data(BaseCartesianData):
 
         ndim = len(cids)
 
-        x = self.get_data(cids[0])
+        if isinstance(subset_state, SliceSubsetState) and ndim == 1 and weights is None:
+            # As in compute_statistic, read only the sliced values rather than
+            # building a mask for the whole dataset. We ravel the values since
+            # the codes of a categorical array can only be found in 1-d.
+            x = subset_state.to_array(self, cids[0]).ravel()
+            subset_state = None  # already applied
+        else:
+            x = self.get_data(cids[0])
         if isinstance(x, categorical_ndarray):
             x = x.codes
 

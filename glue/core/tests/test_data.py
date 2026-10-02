@@ -1188,6 +1188,32 @@ def test_compute_histogram_random_subset_dask():
     assert_allclose(result[:, 0], [178535., 230694., 229997., 231215., 178135.], atol=20_000)
 
 
+def test_compute_histogram_slice_subset():
+
+    # A SliceSubsetState should give the same histogram as the equivalent mask,
+    # but should read the slice directly rather than computing a full mask
+
+    data = Data(x=np.arange(60.).reshape((3, 4, 5)),
+                c=np.tile(['a', 'b', 'b', 'c', 'c'], (3, 4, 1)))
+
+    slices = [slice(1, None), slice(1, 3), slice(2, 5)]
+    mask = np.zeros(data.shape, dtype=bool)
+    mask[tuple(slices)] = True
+    mask_state = MaskSubsetState(mask, data.pixel_component_ids)
+    slice_state = SliceSubsetState(data, slices)
+
+    data.get_mask = MagicMock(side_effect=data.get_mask)
+
+    for cid, hist_range, expected in ((data.id['x'], (-0.5, 59.5), [0, 6, 6]),
+                                      (data.id['c'], (-0.5, 2.5), [0, 4, 8])):
+        result = data.compute_histogram([cid], range=[hist_range], bins=[3], subset_state=mask_state)
+        assert_equal(result, expected)
+        data.get_mask.reset_mock()
+        result = data.compute_histogram([cid], range=[hist_range], bins=[3], subset_state=slice_state)
+        assert_equal(result, expected)
+        assert data.get_mask.call_count == 0
+
+
 def test_disable_auto_links():
 
     settings.AUTO_COMPUTE_COORDS_LINKS = False
