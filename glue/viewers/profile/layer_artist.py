@@ -89,7 +89,7 @@ class ProfileLayerArtist(MatplotlibLayerArtist):
             # passing an empty list to plot_artist
             self.plot_artist.set_data([0.], [0.])
 
-        self.redraw()
+        self._update_visual_attributes()
 
     @defer_draw
     def _calculate_profile_error(self, exc):
@@ -131,8 +131,11 @@ class ProfileLayerArtist(MatplotlibLayerArtist):
         # of updated properties is up to date after this method has been called.
         changed = self.pop_changed_properties()
 
+        # v_min/v_max are set by update_limits after every computation and only
+        # change the plotted values when normalizing, so only recompute for them then
         if force or any(prop in changed for prop in ('layer', 'x_att', 'attribute', 'function', 'normalize',
-                                                     'v_min', 'v_max', 'visible', 'x_display_unit', 'y_display_unit')):
+                                                     'visible', 'x_display_unit', 'y_display_unit')) or \
+                (self._viewer_state.normalize and ('v_min' in changed or 'v_max' in changed)):
             self._calculate_profile(reset=force)
             force = True
 

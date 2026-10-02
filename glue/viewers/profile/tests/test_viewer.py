@@ -1,3 +1,6 @@
+from unittest.mock import patch
+
+import pytest
 from astropy import units as u
 from astropy.wcs import WCS
 
@@ -198,3 +201,68 @@ def test_indexed_data():
     viewer.add_data(data_2d)
 
     assert viewer.state.x_att is data_2d.world_component_ids[0]
+
+
+@pytest.mark.parametrize('normalize', [False, True])
+def test_limits_recompute_only_if_normalized(normalize):
+
+    # Computing a profile updates the layer's v_min/v_max, which only change
+    # the plotted values when normalizing, so they should only cause another
+    # computation in that case.
+
+    data = Data(x=np.arange(24).reshape((4, 3, 2)), label='data')
+
+    app = Application()
+    app.data_collection.append(data)
+
+    viewer = app.new_data_viewer(SimpleProfileViewer)
+    viewer.add_data(data)
+    viewer.state.normalize = normalize
+
+    subset_group = app.data_collection.new_subset_group(subset_state=data.id['x'] < 20, label='subset')
+
+    layer_artist = viewer.layers[1]
+    with patch.object(layer_artist, '_calculate_profile',
+                      wraps=layer_artist._calculate_profile) as calculate_profile:
+        subset_group.subset_state = data.id['x'] < 22
+
+    assert calculate_profile.call_count == (2 if normalize else 1)
+
+    assert layer_artist.state.v_max == 21
+    expected = [0, 0.375, 0.75, 1] if normalize else [5, 11, 17, 21]
+    assert_allclose(layer_artist.plot_artist.get_ydata(), expected)
+
+
+def test_threaded_profile_visible_after_enable():
+
+    # In glue-qt, large profiles are computed in a worker thread, so
+    # _calculate_profile only starts the computation. A subset layer that was
+    # disabled should be shown again once its profile has been computed.
+
+    data1 = Data(x=np.arange(24).reshape((4, 3, 2)), label='data1')
+    data2 = Data(y=[1, 2, 3], label='data2')
+
+    app = Application()
+    app.data_collection.append(data1)
+    app.data_collection.append(data2)
+
+    viewer = app.new_data_viewer(SimpleProfileViewer)
+    viewer.add_data(data1)
+
+    subset_group = app.data_collection.new_subset_group(subset_state=data2.id['y'] > 1, label='subset')
+
+    layer_artist = viewer.layers[1]
+    assert not layer_artist.enabled
+    assert not layer_artist.plot_artist.get_visible()
+
+    queue = []
+    layer_artist._calculate_profile = lambda reset=False: queue.append(reset)
+
+    subset_group.subset_state = data1.id['x'] < 20
+
+    while queue:
+        layer_artist._calculate_profile_thread(reset=queue.pop(0))
+        layer_artist._calculate_profile_postthread()
+
+    assert layer_artist.enabled
+    assert layer_artist.plot_artist.get_visible()
