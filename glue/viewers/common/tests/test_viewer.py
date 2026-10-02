@@ -1,3 +1,6 @@
+import subprocess
+import sys
+
 from glue.config import layer_artist_maker
 from glue.core.application_base import Application
 from glue.core import Data
@@ -103,3 +106,12 @@ def test_viewer_update_data():
     viewer._update_data(msg)
     assert viewer.layers[1].called_component_limits
     assert viewer.layers[1].num_components_changed == 1
+
+
+def test_viewer_does_not_import_ipython():
+    # IPython is slow to import, so importing the viewer module should not
+    # import it. We check this in a subprocess since other tests may already
+    # have imported IPython.
+    code = 'import sys, glue.viewers.common.viewer; print("IPython" in sys.modules)'
+    output = subprocess.check_output([sys.executable, '-c', code], text=True)
+    assert output.strip() == 'False'
