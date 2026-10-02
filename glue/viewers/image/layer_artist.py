@@ -365,6 +365,10 @@ class ImageSubsetLayerArtist(BaseImageLayerArtist):
         # of updated properties is up to date after this method has been called.
         changed = self.pop_changed_properties()
 
+        # update() skips hidden layers, so update fully when shown again
+        if 'visible' in changed and self.state.visible:
+            force = True
+
         if force or any(prop in changed for prop in ('layer', 'attribute', 'color',
                                                      'x_att', 'y_att', 'slices')):
             self._update_data()
@@ -392,5 +396,6 @@ class ImageSubsetLayerArtist(BaseImageLayerArtist):
     def update(self, *event):
         ARRAY_CACHE.pop(self.state.uuid, None)
         PIXEL_CACHE.pop(self.state.uuid, None)
-        self._update_image(force=True)
-        self.redraw()
+        if self.state.visible:
+            self._update_image(force=True)
+            self.redraw()
