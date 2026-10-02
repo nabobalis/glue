@@ -1,7 +1,6 @@
 import os
+import sys
 import warnings
-
-from IPython import get_ipython
 
 from glue.core.hub import HubListener
 from glue.core import BaseData, Subset
@@ -425,8 +424,10 @@ class Viewer(BaseViewer):
 
         # Remove any references to the viewer in the IPython namespace. We use
         # list() here to force an explicit copy since we are modifying the
-        # dictionary in-place
-        shell = get_ipython()
+        # dictionary in-place. IPython is slow to import and there can't be a
+        # shell unless it was already imported, so we don't import it here.
+        ipython = sys.modules.get('IPython')
+        shell = ipython.get_ipython() if ipython is not None else None
         if shell is not None:
             for key in list(shell.user_ns):
                 if shell.user_ns[key] is self:

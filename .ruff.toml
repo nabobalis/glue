@@ -267,6 +267,7 @@ lint.unfixable = [
 
 "glue/utils/data.py" = ["S310"]  # Audit URL open for permitted schemes. Allowing use of `file:` or custom schemes is often unexpected.
 "glue/core/parse.py" = ["S311"]  # Standard pseudo-random generators are not suitable for cryptographic purposes
+"glue/viewers/common/tests/test_viewer.py" = ["S603"]  # `subprocess` call: check for execution of untrusted input
 "glue/viewers/matplotlib/tests/test_python_export.py" = ["S603"]  # `subprocess` call: check for execution of untrusted input
 
 "glue/tests/test_main.py" = ["SIM222"]    # Use `'loaded'` instead of `'loaded' or ...`
