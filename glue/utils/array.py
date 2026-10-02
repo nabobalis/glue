@@ -117,8 +117,15 @@ def view_shape(shape, view):
     """
     if view is None:
         return shape
-    else:
-        return np.broadcast_to(1, shape)[view].shape
+    if (isinstance(view, tuple) and len(view) <= len(shape) and
+            all(isinstance(v, np.ndarray) and v.dtype.kind in 'iu' for v in view)):
+        # For integer index arrays, the view has their broadcast shape followed
+        # by the dimensions they do not index, so avoid materializing the view
+        try:
+            return np.broadcast(*view).shape + tuple(shape[len(view):])
+        except ValueError:  # incompatible or too many index arrays
+            pass
+    return np.broadcast_to(1, shape)[view].shape
 
 
 def stack_view(shape, *views):
