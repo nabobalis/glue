@@ -324,13 +324,13 @@ class GlueSerializer(object):
         return self._objs[name]
 
     def do_all(self):
-        sz = -1
-        while sz != len(self._objs):
-            sz = len(self._objs)
-            # we need to construct this in two steps otherwise we get a
-            # 'dictionary changed size during iteration' error.
-            result = [(oid, self.do(obj)) for oid, obj in list(self._objs.items())]
-            result = dict(result)
+        # Serializing an object can register further objects, so loop until
+        # none appear, but serialize each object only once
+        result = {}
+        while len(result) != len(self._objs):
+            for oid, obj in list(self._objs.items()):
+                if oid not in result:
+                    result[oid] = self.do(obj)
         return result
 
     def do(self, obj):

@@ -1,4 +1,5 @@
 import json
+from collections import Counter
 from io import BytesIO
 
 import pytest
@@ -271,6 +272,35 @@ def test_binary_component_link():
     assert_equal(d1['y'], [2, 3, 4])
     d2 = clone(d1)
     assert_equal(d2['y'], [2, 3, 4])
+
+
+def test_serialize_each_object_once(monkeypatch):
+
+    # Serializing an object can register further objects, which then need to
+    # be serialized too, but each object should only be serialized once rather
+    # than once per pass over the registered objects.
+
+    dc = core.DataCollection([core.Data(x=[1, 2, 3], label='a'),
+                              core.Data(y=[4, 5, 6], label='b')])
+    dc.new_subset_group('s', dc[0].id['x'] > 1)
+
+    calls = Counter()
+    do = GlueSerializer.do
+
+    def counting_do(self, obj):
+        calls[id(obj)] += 1
+        return do(self, obj)
+
+    monkeypatch.setattr(GlueSerializer, 'do', counting_do)
+
+    gs = GlueSerializer(dc)
+    dump = gs.dumps()
+
+    assert [name for name, obj in gs._objs.items() if calls[id(obj)] != 1] == []
+
+    # Serializing all registered objects again should not change the session
+    result = {name: gs.do(obj) for name, obj in gs._objs.items()}
+    assert json.dumps(result, default=gs.json_default, sort_keys=True) == dump
 
 
 class Spam(object):
