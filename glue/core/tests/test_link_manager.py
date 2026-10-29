@@ -115,6 +115,68 @@ class TestDiscoverLinks(object):
         assert links[self.cs[4]] is self.links[-1]
 
 
+def link_depths(data, cid_links):
+    """ The number of links each component found by discover_links is
+    derived through """
+    depths = dict.fromkeys(data.main_components + data.coordinate_components, 0)
+
+    def depth(cid):
+        if cid not in depths:
+            depths[cid] = max(depth(c) for c in cid_links[cid].get_from_ids()) + 1
+        return depths[cid]
+
+    return {cid: depth(cid) for cid in cid_links}
+
+
+def test_discover_links_fewest_links():
+
+    # Each component should be derived through the fewest links, whatever the
+    # order of the links. Which of two equally short paths is taken is not
+    # defined, so only the components and their depths are compared.
+
+    data = Data(p=[1, 2, 3])
+    p = data.id['p']
+    a, b, c, e, f, q = [ComponentID(label) for label in 'abcefq']
+    links = [ComponentLink([p], a),
+             ComponentLink([a], b),
+             ComponentLink([b], c),
+             ComponentLink([c, a], e, lambda x, y: x + y),
+             ComponentLink([p], c),
+             ComponentLink([a], p),  # p is the data's own
+             ComponentLink([q], f)]  # q can't be derived
+
+    for order in (links, links[::-1]):
+        assert link_depths(data, discover_links(data, order)) == {a: 1, b: 2, c: 1, e: 2}
+
+
+class CountingList(list):
+
+    iterations = 0
+
+    def __iter__(self):
+        self.iterations += 1
+        return super().__iter__()
+
+
+def test_discover_links_passes():
+
+    # discover_links used to go through all the links again after each
+    # component it found, so updating the links of 99 datasets linked to the
+    # first one took over 10 s. It should go through the links once per link
+    # depth, and once more to find nothing new.
+
+    data = [Data(x=[1, 2, 3], label='d%i' % i) for i in range(10)]
+    links = CountingList()
+    for other in data[1:]:
+        links.append(ComponentLink([data[0].id['x']], other.id['x']))
+        links.append(ComponentLink([other.id['x']], data[0].id['x']))
+
+    depths = link_depths(data[1], discover_links(data[1], links))
+
+    assert depths == {d.id['x']: 1 if d is data[0] else 2 for d in data if d is not data[1]}
+    assert links.iterations <= 3
+
+
 class TestFindDependents(object):
 
     def setup_method(self, method):
