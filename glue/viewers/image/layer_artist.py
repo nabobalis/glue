@@ -77,6 +77,9 @@ class ImageLayerArtist(BaseImageLayerArtist):
         self.composite.set(self.uuid, array=self.get_image_data,
                            shape=self.get_image_shape)
         self.composite_image = self.axes._composite_image
+        # A layer state restored from a session can already have cmap_bad set
+        if self.state.cmap_bad is not None:
+            self.composite.cmap_bad = self.state.cmap_bad
         self.cmap_bad = self.composite.cmap_bad
 
     @property

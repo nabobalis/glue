@@ -9,6 +9,7 @@ from glue.core.data import Data
 from glue.core.link_helpers import LinkSame
 from glue.core.data_region import RegionData
 from glue.core.data_derived import IndexedData
+from glue.core.state import GlueSerializer, GlueUnSerializer
 from glue.core.tests.test_state import clone
 from astropy.wcs import WCS
 
@@ -326,6 +327,30 @@ def test_indexed_data():
     assert viewer.state.y_att is data_2d.pixel_component_ids[0]
     assert viewer.state.x_att_world is data_2d.world_component_ids[1]
     assert viewer.state.y_att_world is data_2d.world_component_ids[0]
+
+
+def test_restored_layer_cmap_bad():
+
+    # Regression test for a bug that caused an image layer restored from a
+    # session to ignore its cmap_bad, so NaN values were drawn opaque again.
+
+    data = Data(x=np.array([[np.nan, 1.], [2., 3.]]), label='data')
+
+    app = Application()
+    app.data_collection.append(data)
+
+    viewer = app.new_data_viewer(SimpleImageViewer)
+    viewer.add_data(data)
+    viewer.state.layers[0].cmap_bad = (0, 0, 0, 0)
+
+    gs = GlueSerializer(app)
+    app_id, viewer_id = gs.id(app), gs.id(viewer)
+    gu = GlueUnSerializer.loads(gs.dumps())
+    gu.object(app_id)
+    viewer2 = gu.object(viewer_id)
+
+    assert tuple(viewer2.state.layers[0].cmap_bad) == (0, 0, 0, 0)
+    assert viewer2.axes._composite.cmap_bad == viewer2.state.layers[0].cmap_bad
 
 
 def test_2d_3d_linking_exception():
