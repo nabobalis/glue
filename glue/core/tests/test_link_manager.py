@@ -487,3 +487,18 @@ def test_pixel_cid_to_pixel_cid_matrix():
     expected = np.array([[0, 0], [0, 0], [1, 0]], dtype=bool)
     assert_array_equal(pixel_cid_to_pixel_cid_matrix(data2, data3), expected)
     assert_array_equal(pixel_cid_to_pixel_cid_matrix(data3, data2), expected.T)
+
+
+def test_equal_depth_links_use_the_first_added():
+
+    # Of two links equally short to one component, the one added first is used,
+    # whatever the links' hashes are (new objects in each round).
+
+    for first in ('x', 'y') * 10:
+        d = Data(x=np.zeros(3), y=np.zeros(3), label='d')
+        c = Data(c=np.zeros(3), label='c')
+        dc = DataCollection([d, c])
+        via_x = ComponentLink([d.id['x']], c.id['c'], using=lambda x: x + 1)
+        via_y = ComponentLink([d.id['y']], c.id['c'], using=lambda y: y + 2)
+        dc.add_link([via_x, via_y] if first == 'x' else [via_y, via_x])
+        assert d[c.id['c']][0] == (1 if first == 'x' else 2)

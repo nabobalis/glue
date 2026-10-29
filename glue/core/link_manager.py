@@ -266,26 +266,26 @@ class LinkManager(HubListener):
 
     @property
     def _links(self):
+        # A dict, not a set, so that links keep a stable order: each dataset's
+        # own links first, then the external links in the order they were
+        # added. discover_links takes the first of several equally short paths.
 
         if self.data_collection is None:
-            data_links = set()
+            links = {}
         else:
-            data_links = set(link for data in self.data_collection for link in getattr(data, 'links', []))
-
-        external_links = set()
+            links = dict.fromkeys(link for data in self.data_collection for link in getattr(data, 'links', []))
 
         for link in self._external_links:
             if isinstance(link, LinkCollection):
-                for sublink in link:
-                    external_links.add(sublink)
+                links.update(dict.fromkeys(link))
             else:
-                external_links.add(link)
+                links[link] = None
 
-        return data_links | external_links
+        return links
 
     @property
     def _inverse_links(self):
-        return set(link.inverse for link in self._links if link.inverse is not None)
+        return dict.fromkeys(link.inverse for link in self._links if link.inverse is not None)
 
     @property
     def links(self):
