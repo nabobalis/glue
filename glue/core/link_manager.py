@@ -65,18 +65,22 @@ def discover_links(data, links):
     The ComponentLink that data can use to generate the componentID.
     """
 
-    # TODO: try to add shortest paths first -- should
-    # prevent lots of repeated checking
-
     cids = set(data.main_components + data.coordinate_components)
     cid_links = {}
     depth = {}
     for cid in cids:
         depth[cid] = 0
 
-    while True:
-        for link in accessible_links(cids, links):
+    # Go through all the links until a pass finds no new or shorter path.
+    # Starting again after each component found would scale as the number of
+    # derived components times the number of links.
+    changed = True
+    while changed:
+        changed = False
+        for link in links:
             from_ = set(link.get_from_ids())
+            if not from_ <= cids:
+                continue
             to_ = link.get_to_id()
             if len(from_) > 0:
                 cost = max([depth[f] for f in from_]) + 1
@@ -87,10 +91,7 @@ def discover_links(data, links):
             depth[to_] = cost
             cids.add(to_)
             cid_links[to_] = link
-            break
-        else:
-            # no more links to add
-            break
+            changed = True
     return cid_links
 
 
