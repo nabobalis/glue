@@ -104,33 +104,45 @@ def test_data_style():
 
 def test_save_style_colormap_object():
     # preferred_cmap is a Colormap object (the setter converts names to
-    # objects), which is not JSON-serializable; it is saved by name and, as
-    # before, not restored by _load_style
+    # objects), which is not JSON-serializable; it is saved and restored by name
     d = core.Data(x=[1, 2, 3])
     d.style.preferred_cmap = 'viridis'
     gs = GlueSerializer(d)
     dump = gs.dumps()
     assert json.loads(dump)[gs.id(d)]['style']['preferred_cmap'] == 'viridis'
     d2 = GlueUnSerializer.loads(dump).object(gs.id(d))
+    assert d2.style.preferred_cmap.name == 'viridis'
+    assert d2.style == d.style
+
+
+def test_load_style_unknown_colormap():
+    # A colormap that is not registered under its name is saved, but loads as None
+    from matplotlib.colors import ListedColormap
+    d = core.Data(x=[1, 2, 3])
+    d.style.preferred_cmap = ListedColormap(['red', 'blue'], name='not-registered')
+    d2 = clone(d)
     assert d2.style.preferred_cmap is None
 
 
 @requires_astropy
 def test_save_meta_quantity():
-    # A Quantity in Data.meta reaches the np.ndarray saver, which raises a
-    # TypeError rather than GlueSerializeError; it should be dropped like any
-    # other unserializable value instead of aborting the whole save
+    # A Quantity in Data.meta used to reach the np.ndarray saver, whose
+    # np.save raises a TypeError, which aborted the whole save
     import astropy.units as u
     from shapely.geometry import Point
     from glue.core.data_region import RegionData
     for d in (core.Data(x=[1, 2, 3]), RegionData(regions=[Point(0, 0), Point(1, 1)])):
         d.meta['exposure'] = 4 * u.s
+        d.meta['times'] = [[1, 2], [3, 4]] * u.Unit('DN/s')
         d.meta['name'] = 'test'
-        d.meta['count'] = 3
+        # A unit that cannot be read back is left out, as before
+        d.meta['custom'] = 2 * u.def_unit('glorp')
         d2 = clone(d)
-        assert 'exposure' not in d2.meta
+        assert 'custom' not in d2.meta
+        assert d2.meta['exposure'] == 4 * u.s
+        assert d2.meta['exposure'].isscalar
+        assert_equal(d2.meta['times'], [[1, 2], [3, 4]] * u.Unit('DN/s'))
         assert d2.meta['name'] == 'test'
-        assert d2.meta['count'] == 3
 
 
 def test_user_patch_is_called():

@@ -652,6 +652,17 @@ def _load_unit_base(rec, context):
     return Unit(rec["unit_base"])
 
 
+@saver(u.Quantity)
+def _save_quantity(quantity, context):
+    # np.save, the np.ndarray saver, refuses a Quantity
+    return dict(value=quantity.value.tolist(), unit=context.do(quantity.unit)['unit_base'])
+
+
+@loader(u.Quantity)
+def _load_quantity(rec, context):
+    return u.Quantity(rec['value'], rec['unit'])
+
+
 @saver(WCS)
 def _save_wcs(wcs, context):
     return dict(header=wcs.to_header_string())
@@ -744,8 +755,8 @@ def _load_roi(roi, context):
 @saver(VisualAttributes)
 def _save_style(style, context):
     result = dict((a, getattr(style, a)) for a in style._atts)
-    # preferred_cmap may be a Colormap object, which is not JSON-serializable
-    # (and is never restored by _load_style) - store its name instead
+    # preferred_cmap is a Colormap object, which is not JSON-serializable,
+    # so store its name instead
     if 'preferred_cmap' in result:
         result['preferred_cmap'] = getattr(result['preferred_cmap'], 'name', result['preferred_cmap'])
     return result
@@ -754,10 +765,14 @@ def _save_style(style, context):
 @loader(VisualAttributes)
 def _load_style(rec, context):
     result = VisualAttributes()
-    if 'preferred_cmap' in result._atts:
-        result._atts.remove('preferred_cmap')
     for attr in result._atts:
-        setattr(result, attr, rec[attr])
+        if attr != 'preferred_cmap':
+            setattr(result, attr, rec[attr])
+    # Sessions saved before preferred_cmap was saved by name have no name
+    try:
+        result.preferred_cmap = rec.get('preferred_cmap')
+    except ValueError:
+        logger.warning("Could not restore the preferred colormap %r", rec['preferred_cmap'])
     return result
 
 
@@ -1026,15 +1041,13 @@ def _load_data_4(rec, context):
 
 
 def _save_meta(data, context):
-    # Filter out keys/values that can't be serialized. Unknown types raise
-    # GlueSerializeError, but a saver can also fail on a value it accepts
-    # (np.save raises TypeError on a Quantity).
+    # Filter out keys/values that can't be serialized
     meta_filtered = OrderedDict()
     for key, value in data.meta.items():
         try:
             context.do(key)
             context.do(value)
-        except Exception as exc:
+        except GlueSerializeError as exc:
             logger.warning("Skipping unserializable meta key %r: %s", key, exc)
             continue
         meta_filtered[key] = value
