@@ -271,32 +271,21 @@ def compute_fixed_resolution_buffer(data, bounds, target_data=None, target_cid=N
             if isinstance(bounds[i], tuple) and i not in dimensions_all:
                 raise IncompatibleDataException()
 
-    # Ideally, we would use fancy indexing to extract the data, but this can
-    # be slow on non-SSD drives if using memory-mapped arrays, and also doesn't
-    # work at all for dask arrays. For now, we therefore extract a sub-region
-    # from the data before applying fancy indexing if the data is a dask
-    # array. This won't be very efficient when dealing with 3d fixed
-    # resolution buffers, but it will at least work as opposed to not.
+    # A DaskComponent takes these coordinates directly, reading only the
+    # chunks they fall in (see DaskComponent.__getitem__). Since subset
+    # definitions can be pretty arbitrary, we do not rely on fancy indexing
+    # if the target dataset has any DaskComponents when we apply
+    # subset_state: we extract a sub-region from the data first.
 
-    # Since subset definitions can be pretty arbitrary, we do not rely
-    # on fancy indexing if the target dataset has any DaskComponents
-    # when we apply subset_state.
-
-    target_cid_is_dask = target_cid is not None and isinstance(data, Data) and isinstance(data.get_component(target_cid), DaskComponent)
     subset_over_dask_data = subset_state is not None and isinstance(data, Data) and any([isinstance(data.get_component(comp), DaskComponent) for comp in data.main_components])
 
-    if target_cid_is_dask or subset_over_dask_data:
+    if subset_over_dask_data:
 
         # Extract sub-region of data first, then fetch exact coordinate values
         subregion = tuple([slice(np.nanmin(coord), np.nanmax(coord) + 1) for coord in translated_coords])
 
-        # Take subset_state into account, if present
-        if subset_state is None:
-            array = data.get_data(target_cid, view=subregion).astype(float)
-            invalid_value = np.nan
-        else:
-            array = data.get_mask(subset_state, view=subregion)
-            invalid_value = False
+        array = data.get_mask(subset_state, view=subregion)
+        invalid_value = False
 
         translated_coords = tuple([coord - np.nanmin(coord) for coord in translated_coords])
 

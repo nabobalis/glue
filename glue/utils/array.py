@@ -44,7 +44,7 @@ def unbroadcast(array):
         The reshaped array.
     """
 
-    if array.ndim == 0 or not hasattr(array, 'strides'):
+    if array.ndim == 0 or not hasattr(array, 'strides') or array.size == 0:
         return array
 
     new_shape = np.where(np.array(array.strides) == 0, 1, array.shape)

@@ -1,6 +1,7 @@
 # pylint: disable=I0011,W0613,W0201,W0212,E1101,E1103
 
 import operator
+import tracemalloc
 
 import pytest
 import numpy as np
@@ -14,7 +15,7 @@ from glue.tests.helpers import requires_astropy
 
 from ..coordinates import Coordinates
 from ..component import (Component, DerivedComponent, CoordinateComponent,
-                         CategoricalComponent, ExtendedComponent)
+                         CategoricalComponent, ExtendedComponent, DaskComponent)
 from ..component_id import ComponentID
 from ..data import Data
 from ..parse import ParsedCommand, ParsedComponentLink
@@ -332,6 +333,45 @@ def test_view_derived(view):
     dc = DerivedComponent(d, link)
 
     np.testing.assert_array_equal(dc[view], comp.data[view] * 3)
+
+
+@pytest.mark.parametrize(('view'), [(np.array([0, 2]), np.array([1, 3]), np.array([4, 0])),
+                                    (np.array([[0], [2]]), np.array([[1, 3]]), 4),
+                                    (np.array([1, 2]), np.array([0, 3])),
+                                    (np.array([2, 0]), slice(1, 3)),
+                                    (np.array([], dtype=int), np.array([], dtype=int))])
+def test_view_dask_index_arrays(view):
+
+    # Pixels given by several index arrays should be read as numpy reads them,
+    # where dask only takes one array at a time
+
+    da = pytest.importorskip('dask.array')
+
+    values = np.arange(60).reshape((3, 4, 5))
+    comp = DaskComponent(da.from_array(values, chunks=2))
+    np.testing.assert_array_equal(comp[view], values[view])
+
+
+def test_view_dask_index_arrays_along_path():
+
+    # Pixels along a path should be read one by one, not as the product of
+    # their distinct indices along each axis
+
+    da = pytest.importorskip('dask.array')
+
+    values = np.arange(4e6).reshape((1000, 1000, 4))
+    comp = DaskComponent(da.from_array(values, chunks=(250, 250, 4)))
+    path = np.arange(1000)
+
+    tracemalloc.start()
+    try:
+        result = comp[path, path]
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+
+    np.testing.assert_array_equal(result, values[path, path])
+    assert peak < values.nbytes / 10
 
 
 @requires_astropy
