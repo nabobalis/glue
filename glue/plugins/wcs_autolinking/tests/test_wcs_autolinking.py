@@ -141,6 +141,34 @@ def test_wcs_autolink_image_and_spectral_cube():
     assert link[3].get_from_ids() == [px2, pz2]
 
 
+def test_wcs_autolink_low_level_only():
+
+    # Datasets whose WCS has only the low-level APE 14 API, as a
+    # SlicedLowLevelWCS does, should be linked too
+
+    wcs1 = WCS(naxis=2)
+    wcs1.wcs.ctype = 'RA---TAN', 'DEC--TAN'
+    wcs1.wcs.set()
+
+    data1 = Data()
+    data1.coords = SlicedLowLevelWCS(wcs1, Ellipsis)
+    data1['x'] = np.ones((2, 3))
+
+    wcs2 = WCS(naxis=2)
+    wcs2.wcs.ctype = 'RA---TAN', 'DEC--TAN'
+    wcs2.wcs.crpix = 2, 3
+    wcs2.wcs.set()
+
+    data2 = Data()
+    data2.coords = SlicedLowLevelWCS(wcs2, Ellipsis)
+    data2['x'] = np.ones((2, 3))
+
+    dc = DataCollection([data1, data2])
+    links = wcs_autolink(dc)
+    assert len(links) == 1
+    assert_allclose(links[0].forwards(1, 2), (3, 5))
+
+
 def test_clone_wcs_link():
 
     # Make sure that WCSLink can be serialized/deserialized

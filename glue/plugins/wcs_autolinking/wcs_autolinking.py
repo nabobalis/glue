@@ -3,7 +3,7 @@ import copy
 import numpy as np
 from astropy.wcs import WCS
 from astropy.wcs.utils import pixel_to_pixel
-from astropy.wcs.wcsapi import BaseHighLevelWCS, SlicedLowLevelWCS, HighLevelWCSWrapper
+from astropy.wcs.wcsapi import BaseHighLevelWCS, BaseLowLevelWCS, SlicedLowLevelWCS, HighLevelWCSWrapper
 from scipy.optimize import leastsq
 from glue.config import autolinker, link_helper
 from glue.core.link_helpers import MultiLink
@@ -375,7 +375,7 @@ def wcs_autolink(data_collection):
 
     # Find subset of datasets with WCS coordinates
     wcs_datasets = [data for data in data_collection
-                    if hasattr(data, 'coords') and isinstance(data.coords, BaseHighLevelWCS)]
+                    if hasattr(data, 'coords') and isinstance(data.coords, (BaseHighLevelWCS, BaseLowLevelWCS))]
 
     # Only continue if there are at least two such datasets
     if len(wcs_datasets) < 2:
