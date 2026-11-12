@@ -343,6 +343,24 @@ def test_astropy_compound_units():
     assert unit2 is unit
 
 
+@requires_astropy
+def test_astropy_quantity():
+    # A Quantity used to reach the np.ndarray saver, whose np.save raises a
+    # TypeError, so one in Data.meta aborted the whole save
+    import astropy.units as u
+    d = core.Data(x=[1, 2, 3])
+    d.meta['exposure'] = 4 * u.s
+    d.meta['rates'] = [[1, 2], [3, 4]] * u.m / u.s
+    # A unit that cannot be read back is left out, as before
+    d.meta['custom'] = 2 * u.def_unit('glorp')
+    d2 = clone(d)
+    assert d2.meta['exposure'].isscalar
+    assert d2.meta['exposure'] == 4 * u.s
+    assert d2.meta['rates'].unit == u.m / u.s
+    assert_equal(d2.meta['rates'].value, [[1, 2], [3, 4]])
+    assert 'custom' not in d2.meta
+
+
 class DummyClass(object):
     pass
 

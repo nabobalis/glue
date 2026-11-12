@@ -652,6 +652,17 @@ def _load_unit_base(rec, context):
     return Unit(rec["unit_base"])
 
 
+@saver(u.Quantity)
+def _save_quantity(quantity, context):
+    # np.save, which the np.ndarray saver uses, refuses a Quantity
+    return dict(value=quantity.value.tolist(), unit=context.do(quantity.unit)['unit_base'])
+
+
+@loader(u.Quantity)
+def _load_quantity(rec, context):
+    return u.Quantity(rec['value'], rec['unit'])
+
+
 @saver(WCS)
 def _save_wcs(wcs, context):
     return dict(header=wcs.to_header_string())
