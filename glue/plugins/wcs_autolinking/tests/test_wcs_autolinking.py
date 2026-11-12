@@ -714,3 +714,48 @@ def test_wcs_link_ape14_more_world_than_pixel_axes():
     assert link.cids1 == [px1]
     assert link.cids2 == [px2, py2]
     assert_allclose(link.forwards(np.array([1.0, 2.0])), [[1, 2], [0, 0]], atol=1e-8)
+
+
+class BoundedAPE14WCS(APE14WCS):
+    """
+    An APE 14 WCS whose inverse raises outside its pixel bounds.
+    """
+
+    def world_to_pixel_values(self, *world_arrays):
+        pixel = super().world_to_pixel_values(*world_arrays)
+        inside = np.all([(p >= low) & (p <= high) for p, (low, high) in zip(pixel, self.pixel_bounds)], axis=0)
+        if not np.all(inside):
+            raise ValueError('outside the pixel bounds')
+        return pixel
+
+
+def bounded_image(label, shape, crpix, cdelt):
+    wcs = WCS(naxis=2)
+    wcs.wcs.ctype = 'RA---TAN', 'DEC--TAN'
+    wcs.wcs.crpix = crpix
+    wcs.wcs.cdelt = cdelt
+    wcs.wcs.set()
+    wcs.pixel_bounds = [(-0.5, size - 0.5) for size in shape[::-1]]
+    data = Data(label=label, coords=BoundedAPE14WCS(wcs))
+    data['x'] = np.ones(shape)
+    return data
+
+
+@pytest.mark.parametrize(('shape1', 'crpix1', 'shape2', 'crpix2', 'cdelt2', 'pixel1', 'pixel2'), [
+    # The images overlap at the last pixel of both only
+    ((5, 11), (1, 1), (5, 11), (21, 9), (-1, -1), (10, 4), (10, 4)),
+    # The middle pixel of both only: a cross
+    ((5, 21), (11, 3), (21, 5), (3, 11), (1, 1), (10, 2), (2, 10)),
+    # The second image's pixels only, the second within the first
+    ((5, 11), (1, 1), (2, 2), (-6, 1), (1, 1), (7, 0), (0, 0))],
+    ids=['last', 'middle', 'second'])
+def test_wcs_link_ape14_partial_overlap(shape1, crpix1, shape2, crpix2, cdelt2, pixel1, pixel2):
+
+    # Datasets that overlap in part link if the middle, first or last pixel
+    # of either is inside the other, and pixel 0 of both need not be
+
+    data1 = bounded_image('Data 1', shape1, crpix1, (1, 1))
+    data2 = bounded_image('Data 2', shape2, crpix2, cdelt2)
+
+    link = WCSLink(data1, data2)
+    assert_allclose(link.forwards(*pixel1), pixel2, atol=1e-8)

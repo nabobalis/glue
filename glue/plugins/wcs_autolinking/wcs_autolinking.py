@@ -78,6 +78,13 @@ class IncompatibleWCS(Exception):
 
 
 def get_cids_and_functions(wcs1, wcs2, pixel_cids1, pixel_cids2):
+    """
+    Return the pixel component IDs and transform functions linking two WCSes,
+    or Nones if they do not link. They link if the middle, first or last pixel
+    of either dataset can be transformed to the other and back without an
+    error: datasets that overlap in part, such as data observed over partly
+    the same times, may overlap at only one of these.
+    """
 
     def forwards(*pixel_input):
         return pixel_to_pixel(wcs1, wcs2, *pixel_input)
@@ -85,15 +92,20 @@ def get_cids_and_functions(wcs1, wcs2, pixel_cids1, pixel_cids2):
     def backwards(*pixel_input):
         return pixel_to_pixel(wcs2, wcs1, *pixel_input)
 
-    try:
-        # the case with wcs linkages
-        forwards(*[0] * len(pixel_cids1))
-        backwards(*[0] * len(pixel_cids2))
-    except Exception:
-        # the case without wcs linkages
-        return None, None, None, None
+    def round_trip(there, back, pixel_cids):
+        shape = [cid.parent.shape[cid.axis] for cid in pixel_cids]
+        for pixel in ([size // 2 for size in shape], [0] * len(shape), [size - 1 for size in shape]):
+            try:
+                back(*np.atleast_1d(there(*pixel)))
+            except Exception:
+                continue
+            return True
+        return False
 
-    return pixel_cids1, pixel_cids2, forwards, backwards
+    if round_trip(forwards, backwards, pixel_cids1) or round_trip(backwards, forwards, pixel_cids2):
+        return pixel_cids1, pixel_cids2, forwards, backwards
+
+    return None, None, None, None
 
 
 def matched_pixel_axes(wcs, physical_types):
@@ -173,7 +185,7 @@ class WCSLink(MultiLink):
                     wcs2.world_axis_physical_types.count(None) == 0):
 
                 # The easiest way to check if the WCSes are compatible is to simply try and
-                # see if values can be transformed for a single pixel. In future we might
+                # see if values can be transformed for a few pixels. In future we might
                 # find that this requires optimization performance-wise, but for now let's
                 # not do premature optimization.
 
