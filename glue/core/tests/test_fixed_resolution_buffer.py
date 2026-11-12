@@ -158,6 +158,55 @@ def test_base_cartesian_data():
                            [np.nan, np.nan, np.nan, np.nan]]))
 
 
+def test_dask_reads_sampled_chunks():
+
+    # The buffer of a DaskComponent should read only the chunks of the pixels
+    # it samples, not all the chunks of their bounding box
+
+    da = pytest.importorskip('dask.array')
+
+    class Frames:
+
+        shape, dtype, ndim = (50, 4, 5), np.dtype(float), 3
+
+        def __init__(self):
+            self.values = np.arange(1000.).reshape(self.shape)
+            self.read = set()
+
+        def __getitem__(self, key):
+            self.read.update(np.atleast_1d(np.arange(50)[key[0]]).tolist())
+            return self.values[key]
+
+    frames = Frames()
+    data = Data(x=da.from_array(frames, chunks=(1, 4, 5), asarray=True))
+
+    buffer = data.compute_fixed_resolution_buffer(bounds=[(0, 45, 6), 2, (0, 4, 5)],
+                                                  target_cid=data.id['x'])
+
+    assert_equal(buffer, frames.values[::9, 2, :])
+    assert frames.read == {0, 9, 18, 27, 36, 45}
+
+
+def test_dask_unlinked_target_axis():
+
+    # The buffer of a DaskComponent should be broadcast along an axis of the
+    # target data that none of its own axes is linked to
+
+    da = pytest.importorskip('dask.array')
+
+    x = np.arange(20.).reshape((5, 4))
+    image = Data(x=da.from_array(x, chunks=2))
+    cube = Data(y=np.zeros((3, 5, 4)))
+    data_collection = DataCollection([image, cube])
+    data_collection.add_link(LinkSame(image.pixel_component_ids[0], cube.pixel_component_ids[1]))
+    data_collection.add_link(LinkSame(image.pixel_component_ids[1], cube.pixel_component_ids[2]))
+
+    buffer = image.compute_fixed_resolution_buffer(bounds=[(0, 2, 3), (0, 4, 5), (0, 3, 4)],
+                                                   target_data=cube, target_cid=image.id['x'])
+
+    assert_equal(buffer, np.broadcast_to(x, (3, 5, 4)))
+
+
 class TestInvalidateCache():
     """``invalidate_cache`` helper."""
 
