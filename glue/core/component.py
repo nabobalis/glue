@@ -5,7 +5,7 @@ import pandas as pd
 import shapely
 
 from glue.core.coordinate_helpers import dependent_axes, pixel2world_single_axis
-from glue.utils import shape_to_string, coerce_numeric, categorical_ndarray
+from glue.utils import shape_to_string, coerce_numeric, categorical_ndarray, unbroadcast
 
 try:
     import dask.array as da
@@ -555,6 +555,19 @@ class DaskComponent(Component):
         return len(self._data.shape)
 
     def __getitem__(self, key):
+        if (isinstance(key, tuple) and sum(np.ndim(k) for k in key) > 1 and
+                all(np.issubdtype(np.asarray(k).dtype, np.integer) for k in key)):
+            # dask takes one 1-d index array at a time, so take the distinct
+            # indices along each axis in turn, fewest first, which reads only
+            # the chunks they fall in, then pick the pixels as numpy would.
+            shape = np.broadcast(*key).shape
+            key = [unbroadcast(np.asarray(k)) for k in key]
+            distinct = [np.unique(k) for k in key]
+            values = self._data
+            for axis in sorted(range(len(key)), key=lambda axis: len(distinct[axis])):
+                values = values[(slice(None),) * axis + (distinct[axis],)]
+            index = tuple(np.broadcast_to(np.searchsorted(d, k), shape) for d, k in zip(distinct, key))
+            return np.asarray(values.compute())[index]
         return np.asarray(self._data[key].compute())
 
     @property

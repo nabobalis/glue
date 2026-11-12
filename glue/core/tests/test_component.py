@@ -14,7 +14,7 @@ from glue.tests.helpers import requires_astropy
 
 from ..coordinates import Coordinates
 from ..component import (Component, DerivedComponent, CoordinateComponent,
-                         CategoricalComponent, ExtendedComponent)
+                         CategoricalComponent, ExtendedComponent, DaskComponent)
 from ..component_id import ComponentID
 from ..data import Data
 from ..parse import ParsedCommand, ParsedComponentLink
@@ -332,6 +332,27 @@ def test_view_derived(view):
     dc = DerivedComponent(d, link)
 
     np.testing.assert_array_equal(dc[view], comp.data[view] * 3)
+
+
+@pytest.mark.parametrize(('view'), [(np.array([0, 2]), np.array([1, 3]), np.array([4, 0])),
+                                    (np.array([[0], [2]]), np.array([[1, 3]]), 4),
+                                    (np.array([1, 2]), np.array([0, 3])),
+                                    (np.array([2, 0]), slice(1, 3)),
+                                    (np.array([], dtype=int), np.array([], dtype=int)),
+                                    (np.broadcast_to(np.array([[0], [2]]), (4, 2, 3)),
+                                     np.broadcast_to(np.array([1, 3, 0]), (4, 2, 3))),
+                                    (np.array([[0, 2], [1, 0]]),)])
+def test_view_dask_index_arrays(view):
+
+    # Pixels given by several index arrays, or by one with several dimensions,
+    # should be read as numpy reads them, where dask only takes one 1-d array
+    # at a time
+
+    da = pytest.importorskip('dask.array')
+
+    values = np.arange(60).reshape((3, 4, 5))
+    comp = DaskComponent(da.from_array(values, chunks=2))
+    np.testing.assert_array_equal(comp[view], values[view])
 
 
 @requires_astropy
