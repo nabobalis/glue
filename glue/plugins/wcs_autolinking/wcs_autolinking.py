@@ -77,13 +77,14 @@ class IncompatibleWCS(Exception):
     pass
 
 
-def get_cids_and_functions(wcs1, wcs2, pixel_cids1, pixel_cids2):
+def get_cids_and_functions(wcs1, wcs2, pixel_cids1, pixel_cids2, finite=False):
     """
     Return the pixel component IDs and transform functions linking two WCSes,
     or Nones if they do not link. They link if the middle, first or last pixel
     of either dataset can be transformed to the other and back without an
-    error: datasets that overlap in part, such as data observed over partly
-    the same times, may overlap at only one of these.
+    error and, if ``finite``, to finite values: datasets that overlap in part,
+    such as data observed over partly the same times, may overlap at only one
+    of these.
     """
 
     def forwards(*pixel_input):
@@ -96,10 +97,12 @@ def get_cids_and_functions(wcs1, wcs2, pixel_cids1, pixel_cids2):
         shape = [cid.parent.shape[cid.axis] for cid in pixel_cids]
         for pixel in ([size // 2 for size in shape], [0] * len(shape), [size - 1 for size in shape]):
             try:
-                back(*np.atleast_1d(there(*pixel)))
+                there_pixel = np.atleast_1d(there(*pixel))
+                back_pixel = back(*there_pixel)
             except Exception:
                 continue
-            return True
+            if not finite or (np.isfinite(there_pixel).all() and np.isfinite(back_pixel).all()):
+                return True
         return False
 
     if round_trip(forwards, backwards, pixel_cids1) or round_trip(backwards, forwards, pixel_cids2):
@@ -152,8 +155,13 @@ def get_ape14_cids_and_functions(data1, data2):
         if types1 == types2:
             cids1 = [data1.pixel_component_ids[data1.ndim - 1 - i] for i in axes1]
             cids2 = [data2.pixel_component_ids[data2.ndim - 1 - i] for i in axes2]
+            # APE 14 WCSes other than astropy.wcs.WCS may give NaN for world
+            # coordinates outside the data, as gWCS does outside its bounding
+            # box, so a link between two of them must give finite pixels. Pairs
+            # with one astropy.wcs.WCS could be linked before without that.
+            finite = not (isinstance(wcs1, WCS) or isinstance(wcs2, WCS))
             return (get_cids_and_functions(HighLevelWCSWrapper(wcs1_sliced), HighLevelWCSWrapper(wcs2_sliced),
-                                           cids1, cids2) +
+                                           cids1, cids2, finite=finite) +
                     (list(wcs1_sliced.world_axis_physical_types), list(wcs2_sliced.world_axis_physical_types)))
 
         physical_types = types1 & types2

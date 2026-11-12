@@ -8,7 +8,7 @@ from astropy.wcs.wcsapi.wrappers.base import BaseWCSWrapper
 from glue.core import Data, DataCollection
 from glue.plugins.wcs_autolinking.wcs_autolinking import (wcs_autolink, WCSLink,
                                                           OffsetLink, AffineLink,
-                                                          NoAffineApproximation)
+                                                          NoAffineApproximation, IncompatibleWCS)
 from glue.core.link_helpers import MultiLink
 from glue.core.tests.test_state import clone
 from glue.dialogs.link_editor.state import EditableLinkFunctionState
@@ -718,25 +718,30 @@ def test_wcs_link_ape14_more_world_than_pixel_axes():
 
 class BoundedAPE14WCS(APE14WCS):
     """
-    An APE 14 WCS whose inverse raises outside its pixel bounds.
+    An APE 14 WCS whose inverse raises outside its pixel bounds, or gives NaN
+    there as a gWCS does outside its bounding box.
     """
+
+    def __init__(self, wcs, outside):
+        super().__init__(wcs)
+        self.outside = outside
 
     def world_to_pixel_values(self, *world_arrays):
         pixel = super().world_to_pixel_values(*world_arrays)
         inside = np.all([(p >= low) & (p <= high) for p, (low, high) in zip(pixel, self.pixel_bounds)], axis=0)
-        if not np.all(inside):
+        if self.outside == 'raise' and not np.all(inside):
             raise ValueError('outside the pixel bounds')
-        return pixel
+        return tuple(np.where(inside, p, np.nan) for p in pixel)
 
 
-def bounded_image(label, shape, crpix, cdelt):
-    wcs = WCS(naxis=2)
-    wcs.wcs.ctype = 'RA---TAN', 'DEC--TAN'
+def bounded_data(label, shape, crpix, cdelt, outside='raise'):
+    wcs = WCS(naxis=len(shape))
+    wcs.wcs.ctype = ('RA---TAN', 'DEC--TAN', 'FREQ')[:len(shape)]
     wcs.wcs.crpix = crpix
     wcs.wcs.cdelt = cdelt
     wcs.wcs.set()
     wcs.pixel_bounds = [(-0.5, size - 0.5) for size in shape[::-1]]
-    data = Data(label=label, coords=BoundedAPE14WCS(wcs))
+    data = Data(label=label, coords=BoundedAPE14WCS(wcs, outside))
     data['x'] = np.ones(shape)
     return data
 
@@ -754,8 +759,54 @@ def test_wcs_link_ape14_partial_overlap(shape1, crpix1, shape2, crpix2, cdelt2, 
     # Datasets that overlap in part link if the middle, first or last pixel
     # of either is inside the other, and pixel 0 of both need not be
 
-    data1 = bounded_image('Data 1', shape1, crpix1, (1, 1))
-    data2 = bounded_image('Data 2', shape2, crpix2, cdelt2)
+    data1 = bounded_data('Data 1', shape1, crpix1, (1, 1))
+    data2 = bounded_data('Data 2', shape2, crpix2, cdelt2)
 
     link = WCSLink(data1, data2)
     assert_allclose(link.forwards(*pixel1), pixel2, atol=1e-8)
+
+
+def test_wcs_link_ape14_no_overlap():
+
+    # A cube and an image that do not overlap, with WCSes that give NaN and
+    # no error for world coordinates outside the data, are not linked
+
+    data1 = bounded_data('Data 1', (3, 5, 11), (1, 1, 1), (1, 1, 1), outside='nan')
+    data2 = bounded_data('Data 2', (5, 11), (-20, 1), (1, 1), outside='nan')
+
+    with pytest.raises(IncompatibleWCS):
+        WCSLink(data1, data2)
+
+
+def test_wcs_link_nan_pixels_same_axes():
+
+    # Datasets that can be linked pixel for pixel are linked whatever their
+    # pixels transform to, as they always were. These images share only a
+    # corner that is not the middle, first or last pixel of either.
+
+    data1 = bounded_data('Data 1', (11, 11), (1, 1), (1, 1), outside='nan')
+    data2 = bounded_data('Data 2', (11, 11), (-7, 9), (1, 1), outside='nan')
+
+    link = WCSLink(data1, data2)
+    assert_allclose(link.forwards(9, 1), (1, 9))
+
+
+def test_wcs_link_nan_pixels_one_astropy_wcs():
+
+    # So is a pair with one astropy.wcs.WCS, which gives NaN outside its
+    # pixel_bounds in recent versions of astropy: here the frequencies of a
+    # time series of spectra and of a cube that do not overlap
+
+    wcs1 = WCS(naxis=2)
+    wcs1.wcs.ctype = 'TIME', 'FREQ'
+    wcs1.wcs.set()
+    wcs1.pixel_bounds = [(-0.5, 3.5), (-0.5, 2.5)]
+
+    data1 = Data(label='Data 1', coords=wcs1)
+    data1['x'] = np.ones((3, 4))
+
+    data2 = bounded_data('Data 2', (3, 5, 11), (1, 1, -20), (1, 1, 1), outside='nan')
+
+    link = WCSLink(data1, data2)
+    assert link.cids1 == [data1.pixel_component_ids[0]]
+    assert link.cids2 == [data2.pixel_component_ids[0]]
