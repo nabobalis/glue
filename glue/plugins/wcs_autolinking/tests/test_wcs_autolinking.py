@@ -59,6 +59,32 @@ def test_wcs_autolink_2D_emptywcs():
     assert len(links) == 0
 
 
+def test_wcs_autolink_no_common_physical_type():
+
+    # No links should be found, and no error raised, because the WCSes have
+    # no physical type in common.
+
+    wcs1 = WCS(naxis=2)
+    wcs1.wcs.ctype = 'RA---TAN', 'DEC--TAN'
+    wcs1.wcs.set()
+
+    data1 = Data()
+    data1.coords = wcs1
+    data1['x'] = np.ones((2, 3))
+
+    wcs2 = WCS(naxis=1)
+    wcs2.wcs.ctype = ['FREQ']
+    wcs2.wcs.set()
+
+    data2 = Data()
+    data2.coords = wcs2
+    data2['x'] = [4, 5, 6]
+
+    dc = DataCollection([data1, data2])
+    links = wcs_autolink(dc)
+    assert len(links) == 0
+
+
 def test_wcs_autolink_spectral_cube():
 
     # This should link all coordinates

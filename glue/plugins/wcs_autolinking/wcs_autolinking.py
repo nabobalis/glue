@@ -183,6 +183,9 @@ class WCSLink(MultiLink):
             slicing_axes1 = sorted(slicing_axes1, key=str, reverse=True)
             slicing_axes2 = sorted(slicing_axes2, key=str, reverse=True)
 
+            if not slicing_axes1 or not slicing_axes2:
+                raise IncompatibleWCS(f"Can't create WCS link between {data1.label} and {data2.label}")
+
             # Generate slices for the wcs slicing
             slices1 = [slice(None)] * wcs1.world_n_dim
             slices2 = [slice(None)] * wcs2.world_n_dim
