@@ -77,6 +77,37 @@ class IncompatibleWCS(Exception):
     pass
 
 
+def world_objects(wcs):
+    """
+    Return the class of each world object of ``wcs`` and the physical types of
+    the world axes it holds.
+    """
+    wcs = getattr(wcs, 'low_level_wcs', wcs)
+    classes, types = wcs.world_axis_object_classes, {}
+    for (key, _, _), physical_type in zip(wcs.world_axis_object_components, wcs.world_axis_physical_types):
+        types.setdefault(key, []).append(str(physical_type))
+    return [classes[key][0] for key in types], [tuple(sorted(value)) for value in types.values()]
+
+
+def pixel_to_pixel_by_type(wcs_in, wcs_out, *pixel_input):
+    """
+    Transform pixel coordinates as astropy's pixel_to_pixel does, except that
+    world objects it cannot tell apart by class are matched by the physical
+    types of their axes. astropy matches several world objects of one class,
+    such as two Quantity axes, by position, which swaps axes that the two
+    WCSes have in different orders.
+    """
+    classes_in, types_in = world_objects(wcs_in)
+    classes_out, types_out = world_objects(wcs_out)
+
+    if (all(classes_out.count(class_in) == 1 for class_in in classes_in) or types_in == types_out or
+            sorted(types_in) != sorted(types_out) or len(set(types_in)) < len(types_in)):
+        return pixel_to_pixel(wcs_in, wcs_out, *pixel_input)
+
+    world = wcs_in.pixel_to_world(*pixel_input)
+    return wcs_out.world_to_pixel(*[world[types_in.index(types)] for types in types_out])
+
+
 def get_cids_and_functions(wcs1, wcs2, pixel_cids1, pixel_cids2, finite=False):
     """
     Return the pixel component IDs and transform functions linking two WCSes,
@@ -88,10 +119,10 @@ def get_cids_and_functions(wcs1, wcs2, pixel_cids1, pixel_cids2, finite=False):
     """
 
     def forwards(*pixel_input):
-        return pixel_to_pixel(wcs1, wcs2, *pixel_input)
+        return pixel_to_pixel_by_type(wcs1, wcs2, *pixel_input)
 
     def backwards(*pixel_input):
-        return pixel_to_pixel(wcs2, wcs1, *pixel_input)
+        return pixel_to_pixel_by_type(wcs2, wcs1, *pixel_input)
 
     def round_trip(there, back, pixel_cids):
         shape = [cid.parent.shape[cid.axis] for cid in pixel_cids]

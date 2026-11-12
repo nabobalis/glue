@@ -810,3 +810,55 @@ def test_wcs_link_nan_pixels_one_astropy_wcs():
     link = WCSLink(data1, data2)
     assert link.cids1 == [data1.pixel_component_ids[0]]
     assert link.cids2 == [data2.pixel_component_ids[0]]
+
+
+def test_wcs_link_world_axes_of_one_class():
+
+    # astropy.wcs.WCS gives SOLX and SOLY each as a Quantity, and astropy
+    # matches world objects of one class by position, so the axes have to be
+    # matched by physical type: x in the first dataset is y in the second
+
+    wcs1 = WCS(naxis=2)
+    wcs1.wcs.ctype = 'SOLX', 'SOLY'
+    wcs1.wcs.set()
+
+    data1 = Data(label='Data 1', coords=wcs1)
+    data1['x'] = np.ones((2, 3))
+
+    wcs2 = WCS(naxis=2)
+    wcs2.wcs.ctype = 'SOLY', 'SOLX'
+    wcs2.wcs.set()
+
+    data2 = Data(label='Data 2', coords=wcs2)
+    data2['x'] = np.ones((3, 2))
+
+    link = WCSLink(data1, data2)
+    assert_allclose(link.forwards(1, 2), (2, 1))
+    assert_allclose(link.backwards(2, 1), (1, 2))
+
+
+def test_wcs_link_ape14_world_axes_of_one_class():
+
+    # As above, in the general case for APE 14 WCSes other than astropy.wcs.WCS
+
+    wcs1 = WCS(naxis=3)
+    wcs1.wcs.ctype = 'SOLX', 'FREQ', 'SOLY'
+    wcs1.wcs.set()
+
+    data1 = Data(label='Data 1', coords=APE14WCS(wcs1))
+    data1['x'] = np.ones((2, 3, 4))
+    pz1, _py1, px1 = data1.pixel_component_ids
+
+    wcs2 = WCS(naxis=2)
+    wcs2.wcs.ctype = 'SOLY', 'SOLX'
+    wcs2.wcs.set()
+
+    data2 = Data(label='Data 2', coords=APE14WCS(wcs2))
+    data2['x'] = np.ones((4, 2))
+    py2, px2 = data2.pixel_component_ids
+
+    link = WCSLink(data1, data2)
+    assert link.cids1 == [px1, pz1]
+    assert link.cids2 == [px2, py2]
+    assert_allclose(link.forwards(np.array([1.0, 2.0]), np.array([0.5, 1.5])), [[0.5, 1.5], [1, 2]])
+    assert_allclose(link.backwards(np.array([0.5, 1.5]), np.array([1.0, 2.0])), [[1, 2], [0.5, 1.5]])
