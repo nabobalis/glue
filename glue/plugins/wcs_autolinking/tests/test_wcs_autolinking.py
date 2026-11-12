@@ -2,6 +2,8 @@ import pytest
 import numpy as np
 from numpy.testing import assert_allclose
 from astropy.wcs import WCS
+from astropy.wcs.wcsapi import HighLevelWCSMixin, SlicedLowLevelWCS
+from astropy.wcs.wcsapi.wrappers.base import BaseWCSWrapper
 
 from glue.core import Data, DataCollection
 from glue.plugins.wcs_autolinking.wcs_autolinking import (wcs_autolink, WCSLink,
@@ -640,3 +642,75 @@ def test_no_wcs_overlap():
 
     with pytest.raises(NoAffineApproximation, match='no overlap'):
         link.as_affine_link()
+
+
+class APE14WCS(BaseWCSWrapper, HighLevelWCSMixin):
+    """
+    An APE 14 WCS that is not an astropy.wcs.WCS, as a gWCS is.
+    """
+
+    def pixel_to_world_values(self, *pixel_arrays):
+        return self._wcs.pixel_to_world_values(*pixel_arrays)
+
+    def world_to_pixel_values(self, *world_arrays):
+        return self._wcs.world_to_pixel_values(*world_arrays)
+
+
+def test_wcs_link_ape14_cube_and_image():
+
+    # The general case read has_celestial and wcs.lng, which an APE 14 WCS
+    # other than astropy.wcs.WCS need not have
+
+    wcs1 = WCS(naxis=3)
+    wcs1.wcs.ctype = 'RA---TAN', 'FREQ', 'DEC--TAN'
+    wcs1.wcs.set()
+
+    data1 = Data(label='Data 1', coords=APE14WCS(wcs1))
+    data1['x'] = np.ones((2, 3, 4))
+    pz1, _py1, px1 = data1.pixel_component_ids
+
+    wcs2 = WCS(naxis=2)
+    wcs2.wcs.ctype = 'RA---TAN', 'DEC--TAN'
+    wcs2.wcs.set()
+
+    data2 = Data(label='Data 2', coords=APE14WCS(wcs2))
+    data2['x'] = np.ones((2, 4))
+    py2, px2 = data2.pixel_component_ids
+
+    links = wcs_autolink(DataCollection([data1, data2]))
+    assert len(links) == 1
+    link = links[0]
+    assert link.cids1 == [px1, pz1]
+    assert link.cids2 == [px2, py2]
+    assert_allclose(link.forwards(np.array([1.0, 2.0]), np.array([0.5, 1.5])), [[1, 2], [0.5, 1.5]])
+
+
+def test_wcs_link_ape14_more_world_than_pixel_axes():
+
+    # A spectrum along a slit, the right ascension and declination varying
+    # along the slit: three world axes on two pixel axes. The celestial axes
+    # are linked through the pixel axis they vary along, not the spectral one.
+
+    wcs = WCS(naxis=3)
+    wcs.wcs.ctype = 'RA---TAN', 'DEC--TAN', 'FREQ'
+    wcs.wcs.pc = [[1, 0.5, 0], [-0.5, 1, 0], [0, 0, 1]]
+    wcs.wcs.set()
+
+    data1 = Data(label='Data 1', coords=APE14WCS(SlicedLowLevelWCS(wcs, (slice(None), 0, slice(None)))))
+    data1['x'] = np.ones((3, 4))
+    _py1, px1 = data1.pixel_component_ids
+    assert data1.coords.world_n_dim == 3
+
+    wcs2 = WCS(naxis=2)
+    wcs2.wcs.ctype = 'RA---TAN', 'DEC--TAN'
+    wcs2.wcs.pc = [[1, 0.5], [-0.5, 1]]
+    wcs2.wcs.set()
+
+    data2 = Data(label='Data 2', coords=APE14WCS(wcs2))
+    data2['x'] = np.ones((2, 4))
+    py2, px2 = data2.pixel_component_ids
+
+    link = WCSLink(data1, data2)
+    assert link.cids1 == [px1]
+    assert link.cids2 == [px2, py2]
+    assert_allclose(link.forwards(np.array([1.0, 2.0])), [[1, 2], [0, 0]], atol=1e-8)

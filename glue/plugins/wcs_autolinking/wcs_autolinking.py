@@ -1,6 +1,7 @@
 import copy
 
 import numpy as np
+from astropy.wcs import WCS
 from astropy.wcs.utils import pixel_to_pixel
 from astropy.wcs.wcsapi import BaseHighLevelWCS, SlicedLowLevelWCS, HighLevelWCSWrapper
 from scipy.optimize import leastsq
@@ -84,17 +85,68 @@ def get_cids_and_functions(wcs1, wcs2, pixel_cids1, pixel_cids2):
     def backwards(*pixel_input):
         return pixel_to_pixel(wcs2, wcs1, *pixel_input)
 
-    pixel_input = [0] * len(pixel_cids1)
-
     try:
         # the case with wcs linkages
-        forwards(*pixel_input)
-        backwards(*pixel_input)
+        forwards(*[0] * len(pixel_cids1))
+        backwards(*[0] * len(pixel_cids2))
     except Exception:
         # the case without wcs linkages
         return None, None, None, None
 
     return pixel_cids1, pixel_cids2, forwards, backwards
+
+
+def matched_pixel_axes(wcs, physical_types):
+    """
+    Return the pixel axes of ``wcs`` along which only world axes of the given
+    physical types vary.
+    """
+    matrix = np.asarray(wcs.axis_correlation_matrix)
+    matched = np.array([physical_type in physical_types for physical_type in wcs.world_axis_physical_types])
+    return np.nonzero(matrix[matched].any(axis=0) & ~matrix[~matched].any(axis=0))[0]
+
+
+def get_ape14_cids_and_functions(data1, data2):
+    """
+    Link the pixel axes of two datasets with APE 14 WCSes other than
+    astropy.wcs.WCS (e.g. gWCS) along which only world axes of the physical
+    types both have vary, the other pixel axes sliced at 0. Pixel and world
+    axes are matched with the axis correlation matrix, since APE 14 does not
+    make world axis i depend on pixel axis i, nor give one world axis per pixel
+    axis. Physical types are dropped until both sliced WCSes have the same.
+    """
+
+    wcs1, wcs2 = data1.coords, data2.coords
+    physical_types = set(wcs1.world_axis_physical_types) & set(wcs2.world_axis_physical_types) - {None}
+
+    while physical_types:
+
+        axes1 = matched_pixel_axes(wcs1, physical_types)
+        axes2 = matched_pixel_axes(wcs2, physical_types)
+
+        if len(axes1) == 0 or len(axes2) == 0:
+            break
+
+        # Slices are in numpy order, the reverse of the pixel axes
+        slices1 = tuple(slice(None) if i in axes1 else 0 for i in range(wcs1.pixel_n_dim))[::-1]
+        slices2 = tuple(slice(None) if i in axes2 else 0 for i in range(wcs2.pixel_n_dim))[::-1]
+
+        wcs1_sliced = SlicedLowLevelWCS(wcs1, slices1)
+        wcs2_sliced = SlicedLowLevelWCS(wcs2, slices2)
+
+        types1 = set(wcs1_sliced.world_axis_physical_types)
+        types2 = set(wcs2_sliced.world_axis_physical_types)
+
+        if types1 == types2:
+            cids1 = [data1.pixel_component_ids[data1.ndim - 1 - i] for i in axes1]
+            cids2 = [data2.pixel_component_ids[data2.ndim - 1 - i] for i in axes2]
+            return (get_cids_and_functions(HighLevelWCSWrapper(wcs1_sliced), HighLevelWCSWrapper(wcs2_sliced),
+                                           cids1, cids2) +
+                    (list(wcs1_sliced.world_axis_physical_types), list(wcs2_sliced.world_axis_physical_types)))
+
+        physical_types = types1 & types2
+
+    return None, None, None, None, [], []
 
 
 @link_helper(category='Astronomy')
@@ -132,7 +184,12 @@ class WCSLink(MultiLink):
                 self._physical_types_1 = wcs1.world_axis_physical_types
                 self._physical_types_2 = wcs2.world_axis_physical_types
 
-        if not forwards or not backwards:
+        if (not forwards or not backwards) and not (isinstance(wcs1, WCS) and isinstance(wcs2, WCS)):
+            # The general case below reads attributes of astropy.wcs.WCS only
+            (pixel_cids1, pixel_cids2, forwards, backwards,
+             self._physical_types_1, self._physical_types_2) = get_ape14_cids_and_functions(data1, data2)
+
+        elif not forwards or not backwards:
             # A generalized APE 14-compatible way
             # Handle also the extra-spatial axes such as those of the time and wavelength dimensions
 
