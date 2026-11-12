@@ -78,6 +78,10 @@ class TestExportPython(BaseTestExportPython):
         self.data_collection.new_subset_group('mysubset', self.data.id['x'] > 0.25)
         self.assert_same(tmpdir)
 
+    def test_subset_partial_along_profile_axis(self, tmpdir):
+        self.data_collection.new_subset_group('mysubset', self.data.pixel_component_ids[0] > 2.5)
+        self.assert_same(tmpdir)
+
     def test_xatt(self, tmpdir):
         self.viewer.x_att = self.data.pixel_component_ids[1]
         self.assert_same(tmpdir)

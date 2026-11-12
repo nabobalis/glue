@@ -18,14 +18,14 @@ def python_export_profile_layer(layer, *args):
         script += "cid = base_data.find_component_id('{0}')\n".format(layer.state.attribute.label)
         script += "profile_values = base_data.compute_statistic('{0}', cid, axis=collapsed_axes, subset_state=layer_data.subset_state)\n\n".format(layer._viewer_state.function)
     else:
+        script += "base_data = layer_data\n"
         script += "cid = layer_data.find_component_id('{0}')\n".format(layer.state.attribute.label)
         script += "profile_values = layer_data.compute_statistic('{0}', cid, axis=collapsed_axes)\n\n".format(layer._viewer_state.function)
 
     script += "# Extract the values for the x-axis\n"
     script += "axis_view = [0] * layer_data.ndim\n"
     script += "axis_view[profile_axis] = slice(None)\n"
-    script += "profile_x_values = layer_data['{0}', tuple(axis_view)]\n".format(layer._viewer_state.x_att)
-    script += "keep = ~np.isnan(profile_values) & ~np.isnan(profile_x_values)\n\n"
+    script += "profile_x_values = base_data['{0}', tuple(axis_view)]\n\n".format(layer._viewer_state.x_att)
 
     if layer._viewer_state.normalize:
         script += "# Normalize the profile data\n"
@@ -40,7 +40,7 @@ def python_export_profile_layer(layer, *args):
                         zorder=layer.state.zorder,
                         drawstyle='steps-mid')
 
-    script += "handle,  = ax.plot(profile_x_values[keep], profile_values[keep], '-', {0})\n".format(serialize_options(plot_options))
+    script += "handle,  = ax.plot(profile_x_values, profile_values, '-', {0})\n".format(serialize_options(plot_options))
     script += "legend_handles.append(handle)\n"
     script += "legend_labels.append(layer_data.label)\n\n"
 
