@@ -137,6 +137,14 @@ def test_unbroadcast():
     np.testing.assert_allclose(z[0, 0], x)
 
 
+def test_unbroadcast_empty():
+
+    # An empty array has strides of 0 without having been broadcast
+
+    x = np.zeros((0, 3))
+    assert unbroadcast(x).shape == (0, 3)
+
+
 def test_broadcast_arrays_minimal():
 
     a = np.array([1, 2, 3])
